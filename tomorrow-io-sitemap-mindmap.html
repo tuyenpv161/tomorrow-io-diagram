@@ -1,0 +1,886 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Tomorrow.io — Website Architecture (Screaming Frog Data)</title>
+<style>
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body {
+  background: #080c18;
+  color: #e2e8f0;
+  font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+  overflow: hidden;
+  user-select: none;
+}
+#canvas-wrap { width: 100vw; height: 100vh; position: relative; overflow: hidden; }
+#svg-layer { position: absolute; top:0; left:0; width:100%; height:100%; pointer-events:none; z-index:0; }
+#mindmap { position: absolute; top:0; left:0; transform-origin: 0 0; z-index:1; }
+
+.node {
+  position: absolute;
+  border-radius: 8px;
+  padding: 6px 12px;
+  cursor: pointer;
+  font-size: 11px;
+  font-weight: 600;
+  text-align: center;
+  transition: transform 0.12s ease, box-shadow 0.12s ease;
+  border: 1.5px solid transparent;
+  white-space: nowrap;
+  z-index: 2;
+  line-height: 1.35;
+}
+.node:hover { transform: scale(1.08); z-index:100; box-shadow: 0 0 16px rgba(255,255,255,0.15); }
+
+.root { background: linear-gradient(135deg,#1a56db,#0ea5e9); color:#fff; font-size:14px; font-weight:700; padding:12px 20px; border-radius:12px; box-shadow:0 0 50px rgba(14,165,233,0.6); border-color:#38bdf8; }
+.s-product { background:#111d36; border-color:#3b82f6; color:#93c5fd; }
+.s-space   { background:#12182e; border-color:#818cf8; color:#c7d2fe; }
+.s-solutions{ background:#0f2820; border-color:#10b981; color:#6ee7b7; }
+.s-gov     { background:#0e2323; border-color:#06b6d4; color:#67e8f9; }
+.s-company { background:#1e1028; border-color:#a855f7; color:#d8b4fe; }
+.s-content { background:#1c1808; border-color:#f59e0b; color:#fcd34d; }
+.s-media   { background:#1e0a0a; border-color:#ef4444; color:#fca5a5; }
+.s-dash    { background:#0e1e1c; border-color:#14b8a6; color:#5eead4; }
+.s-compare { background:#1a1208; border-color:#d97706; color:#fde68a; }
+.s-lp      { background:#150e22; border-color:#7c3aed; color:#c4b5fd; }
+
+.c-product { background:#0d1a30; border-color:#3b82f6; color:#bfdbfe; }
+.c-space   { background:#0e142a; border-color:#818cf8; color:#e0e7ff; }
+.c-solutions{ background:#0b2018; border-color:#10b981; color:#a7f3d0; }
+.c-gov     { background:#0a1e1e; border-color:#06b6d4; color:#a5f3fc; }
+.c-company { background:#160c20; border-color:#a855f7; color:#e9d5ff; }
+.c-content { background:#181408; border-color:#f59e0b; color:#fde68a; }
+.c-media   { background:#180808; border-color:#ef4444; color:#fecaca; }
+.c-dash    { background:#0a1a18; border-color:#14b8a6; color:#99f6e4; }
+
+.leaf { font-size: 10px; font-weight:500; padding:4px 9px; border-radius:6px; opacity:0.82; }
+.leaf:hover { opacity:1; }
+.leaf.c-solutions { border-color:#34d399; }
+.leaf.c-product { border-color:#60a5fa; }
+.leaf.c-space { border-color:#a5b4fc; }
+.leaf.c-content { border-color:#fbbf24; }
+
+/* badge */
+.badge { display:inline-block; background:rgba(255,255,255,0.12); border-radius:3px; padding:1px 5px; font-size:9px; margin-left:4px; vertical-align:middle; }
+
+#tooltip {
+  position:fixed; background:rgba(8,12,24,0.97); border:1px solid #1e293b; border-radius:8px;
+  padding:10px 14px; font-size:11px; max-width:280px; pointer-events:none; display:none;
+  z-index:999; line-height:1.65; color:#cbd5e1; box-shadow: 0 8px 32px rgba(0,0,0,0.6);
+}
+#tooltip strong { color:#f8fafc; font-size:12px; display:block; margin-bottom:4px; }
+#tooltip .url { color:#60a5fa; font-size:10px; margin-top:4px; word-break:break-all; }
+
+#legend {
+  position:fixed; bottom:16px; left:16px; background:rgba(8,12,24,0.93); border:1px solid #1e293b;
+  border-radius:10px; padding:12px 16px; font-size:10.5px; z-index:999;
+}
+#legend h4 { color:#64748b; font-size:9.5px; margin-bottom:8px; letter-spacing:0.06em; text-transform:uppercase; }
+.li { display:flex; align-items:center; gap:7px; margin-bottom:4px; }
+.ld { width:9px; height:9px; border-radius:50%; flex-shrink:0; }
+
+#controls { position:fixed; top:14px; right:14px; display:flex; gap:7px; z-index:999; }
+.btn { background:#1e293b; border:1px solid #334155; color:#94a3b8; padding:5px 12px; border-radius:6px; cursor:pointer; font-size:12px; }
+.btn:hover { background:#334155; color:#e2e8f0; }
+
+#titlebar { position:fixed; top:14px; left:14px; z-index:999; }
+#titlebar h1 { font-size:13px; font-weight:700; color:#e2e8f0; }
+#titlebar p { font-size:10px; color:#475569; margin-top:2px; }
+#titlebar .tag { display:inline-block; background:#0ea5e9; color:#fff; font-size:9px; padding:2px 6px; border-radius:3px; margin-left:6px; }
+
+#panel {
+  position:fixed; top:60px; right:14px; width:260px; background:rgba(8,12,24,0.97);
+  border:1px solid #1e293b; border-radius:10px; padding:14px 16px; z-index:999;
+  font-size:11px; display:none;
+}
+#panel h3 { font-size:12.5px; font-weight:700; margin-bottom:6px; }
+#panel p { color:#94a3b8; line-height:1.6; margin-bottom:8px; }
+#panel .url { color:#60a5fa; font-size:10px; word-break:break-all; margin-bottom:6px; }
+#panel .x { float:right; cursor:pointer; color:#475569; font-size:15px; line-height:1; }
+#panel .tag { display:inline-block; background:#1e293b; border-radius:3px; padding:2px 6px; margin:2px 2px 0; font-size:9.5px; color:#94a3b8; }
+
+#stats {
+  position:fixed; bottom:16px; right:16px; background:rgba(8,12,24,0.93); border:1px solid #1e293b;
+  border-radius:10px; padding:12px 16px; font-size:10.5px; z-index:999; text-align:right;
+}
+#stats .n { font-size:22px; font-weight:700; color:#0ea5e9; line-height:1; }
+#stats .l { color:#475569; font-size:9.5px; }
+
+/* interaction hints */
+.node.focused-silo { box-shadow: 0 0 22px rgba(245,158,11,0.5) !important; }
+.hint-bar {
+  position:fixed; bottom:56px; left:50%; transform:translateX(-50%);
+  background:rgba(8,12,24,0.88); border:1px solid #1e293b; border-radius:20px;
+  padding:5px 16px; font-size:10px; color:#475569; z-index:999; pointer-events:none;
+  white-space:nowrap;
+}
+.hint-bar span { margin:0 8px; }
+.hint-bar span b { color:#94a3b8; }
+</style>
+</head>
+<body>
+<div id="canvas-wrap">
+  <svg id="svg-layer"><g id="svg-group"></g></svg>
+  <div id="mindmap"></div>
+</div>
+
+<div id="titlebar">
+  <h1>Tomorrow.io — Website Architecture <span class="tag">Screaming Frog</span></h1>
+  <p>Actual crawl data · 10 silos · ~500+ URLs · Digital Twin Reference</p>
+</div>
+
+<div id="controls">
+  <button class="btn" onclick="resetView()">Reset</button>
+  <button class="btn" onclick="zoomIn()">+</button>
+  <button class="btn" onclick="zoomOut()">-</button>
+</div>
+
+<div id="legend">
+  <h4>Silos (từ crawl thực tế)</h4>
+  <div class="li"><div class="ld" style="background:#3b82f6"></div><span>Product & API</span></div>
+  <div class="li"><div class="ld" style="background:#818cf8"></div><span>Space Program</span></div>
+  <div class="li"><div class="ld" style="background:#10b981"></div><span>Solutions (25 verticals)</span></div>
+  <div class="li"><div class="ld" style="background:#06b6d4"></div><span>Government & Defense</span></div>
+  <div class="li"><div class="ld" style="background:#14b8a6"></div><span>Dashboards Templates</span></div>
+  <div class="li"><div class="ld" style="background:#f59e0b"></div><span>Content (Blog/FAQ/Cases)</span></div>
+  <div class="li"><div class="ld" style="background:#ef4444"></div><span>Media & PR</span></div>
+  <div class="li"><div class="ld" style="background:#a855f7"></div><span>Company</span></div>
+  <div class="li"><div class="ld" style="background:#d97706"></div><span>Competitor Compare</span></div>
+  <div class="li"><div class="ld" style="background:#7c3aed"></div><span>Landing Pages (lp/)</span></div>
+</div>
+
+<div id="tooltip"></div>
+
+<div id="panel">
+  <span class="x" onclick="document.getElementById('panel').style.display='none'">×</span>
+  <h3 id="p-title"></h3>
+  <div class="url" id="p-url"></div>
+  <p id="p-desc"></p>
+  <div id="p-tags"></div>
+</div>
+
+<div id="stats">
+  <div class="n">500+</div>
+  <div class="l">URLs crawled</div>
+</div>
+
+<div class="hint-bar">
+  <span><b>Hover</b> node → highlight edges</span>
+  <span><b>Click</b> silo → focus</span>
+  <span><b>Click</b> node → expand/collapse</span>
+  <span><b>Drag</b> node → reposition</span>
+  <span><b>Esc</b> → reset view</span>
+</div>
+
+<script>
+// ===== NODE DATA (rebuilt from Screaming Frog crawl) =====
+const N = [
+
+// ---- ROOT ----
+{id:'root', label:'tomorrow.io', cls:'root', x:980, y:520,
+ url:'tomorrow.io/', desc:'Space-powered AI Resilience Platform. Kết hợp satellite constellation (DeepSky), AI model FOCUS 15-min refresh, Gale Agentic AI. Target: enterprise B2B + gov.'},
+
+// ==============================
+// SILO 1: PRODUCT & API
+// ==============================
+{id:'s-product', label:'PRODUCT & API', cls:'s-product', x:340, y:160,
+ url:'tomorrow.io/weather-api/ + /weather-intelligence-platform/', desc:'Core product silo. 2 main product lines: Weather API (dev/enterprise) + Resilience Platform (dashboard). Đây là "conversion engine" chính.'},
+
+{id:'p-platform', label:'Resilience Platform', cls:'c-product', x:200, y:80,
+ url:'tomorrow.io/weather-intelligence-platform/', desc:'All-in-one dashboard. Customized views, alerting, workflows. Target: ops teams không cần code.'},
+{id:'p-api', label:'Weather API', cls:'c-product', x:200, y:150,
+ url:'tomorrow.io/weather-api/', desc:'Free tier + paid plans. 60+ data layers. JSON & natural language. 99.9% uptime. Dành cho developer.'},
+{id:'p-api-maps', label:'Maps API', cls:'leaf c-product', x:60, y:110,
+ url:'tomorrow.io/weather-api/weather-maps-api/', desc:'Map tiles overlay. Tích hợp Mapbox, Google Maps.'},
+{id:'p-api-hist', label:'Historical API', cls:'leaf c-product', x:60, y:145,
+ url:'tomorrow.io/weather-api/historical-weather-api/', desc:'2+ thập kỷ dữ liệu lịch sử. Climate API.'},
+{id:'p-api-hist2', label:'Historical Data', cls:'leaf c-product', x:60, y:180,
+ url:'tomorrow.io/weather-api/historical-weather-data/', desc:'Hyperlocal 20-year historical dataset.'},
+{id:'p-api-alerts', label:'Alerts & Notifs', cls:'leaf c-product', x:60, y:215,
+ url:'tomorrow.io/weather-api/weather-alerts-and-notifications/', desc:'Configurable alert triggers, webhook, email.'},
+{id:'p-datalayers', label:'Data Layers (30+)', cls:'c-product', x:200, y:230,
+ url:'tomorrow.io/weather-api/data-layers/', desc:'30+ individual data layer pages — mỗi layer có SEO page riêng. Temperature, Wind, Rain, Snow, UV, Humidity, Cloud...'},
+{id:'p-dl-temp', label:'Temperature', cls:'leaf c-product', x:60, y:270,
+ url:'/data-layers/temperature/', desc:''},
+{id:'p-dl-wind', label:'Wind Speed/Dir', cls:'leaf c-product', x:60, y:298,
+ url:'/data-layers/wind-speed-wind-direction/', desc:''},
+{id:'p-dl-rain', label:'Rain/Snow/Sleet', cls:'leaf c-product', x:60, y:326,
+ url:'/data-layers/accumulation-of-rain/ +snow +sleet +ice', desc:'4 precipitation accumulation pages riêng.'},
+{id:'p-dl-uv', label:'UV/Cloud/Humidity', cls:'leaf c-product', x:60, y:354,
+ url:'/data-layers/uv-index/ +cloud-cover +humidity', desc:''},
+{id:'p-tech', label:'Technology (CBAM)', cls:'c-product', x:200, y:310,
+ url:'tomorrow.io/technology/ + /technology/cbam/', desc:'Technology page explaining CBAM — Climate-Based Atmospheric Modeling proprietary approach.'},
+{id:'p-latest', label:'Latest Features', cls:'c-product', x:200, y:370,
+ url:'tomorrow.io/latest-features/', desc:'Changelog / feature release hub. Connects blog Product category.'},
+
+// ==============================
+// SILO 2: SPACE PROGRAM
+// ==============================
+{id:'s-space', label:'SPACE PROGRAM', cls:'s-space', x:340, y:820,
+ url:'tomorrow.io/space/', desc:'Dedicated silo riêng. DeepSky constellation + hardware product pages. Dual purpose: enterprise credibility + gov/defense contract.'},
+
+{id:'sp-main', label:'/space/', cls:'c-space', x:200, y:750,
+ url:'tomorrow.io/space/', desc:'Landing page cho toàn bộ space program.'},
+{id:'sp-deepsky', label:'DeepSky', cls:'c-space', x:80, y:700,
+ url:'tomorrow.io/space/deepsky/', desc:'pLEO constellation. 10+ satellites. Ka-band radar + microwave sounder. 60-min global revisit.'},
+{id:'sp-radar', label:'Radar Satellites', cls:'leaf c-space', x:-60, y:690,
+ url:'tomorrow.io/space/radar-satellites/', desc:'Ka-band radar satellites — cloud-penetrating.'},
+{id:'sp-sounder', label:'Microwave Sounder', cls:'leaf c-space', x:-60, y:725,
+ url:'tomorrow.io/space/sounder/', desc:'Passive microwave sounder satellites.'},
+{id:'sp-pathfinder', label:'Pathfinder', cls:'c-space', x:80, y:780,
+ url:'tomorrow.io/space/pathfinder/', desc:'Next-gen satellite program / R&D initiative.'},
+{id:'sp-arena', label:'Arena', cls:'leaf c-space', x:-60, y:770,
+ url:'tomorrow.io/space/arena/', desc:'Mission operations center.'},
+{id:'sp-products', label:'Space Products', cls:'leaf c-space', x:-60, y:800,
+ url:'tomorrow.io/space/products/', desc:'Commercial space data products catalog.'},
+{id:'sp-satdata', label:'Satellite Data', cls:'c-space', x:200, y:840,
+ url:'tomorrow.io/satellite-data/', desc:'Data products từ constellation. Tách với /space/ — focus on data output vs hardware.'},
+
+// ==============================
+// SILO 3: SOLUTIONS (25 verticals)
+// ==============================
+{id:'s-solutions', label:'SOLUTIONS\n(25 Verticals)', cls:'s-solutions', x:980, y:120,
+ url:'tomorrow.io/solutions/', desc:'25 industry vertical pages! Mỗi page = same platform, reframed theo pain point ngành. Classic SEO vertical strategy.'},
+
+// Row 1 - Primary verticals (largest pages)
+{id:'sol-insurance', label:'Insurance', cls:'c-solutions', x:780, y:30,
+ url:'tomorrow.io/solutions/insurance/', desc:'P&C, auto, home, commercial. CAT loss prediction, claims triage. Shield Agentic Suite.'},
+{id:'sol-aviation', label:'Aviation', cls:'c-solutions', x:880, y:30,
+ url:'tomorrow.io/solutions/aviation/', desc:'Ground ops, routing, scheduling. Altitude Agentic Suite. Partner: JetBlue, FIA.'},
+{id:'sol-logistics', label:'Logistics & Transport', cls:'c-solutions', x:980, y:30,
+ url:'tomorrow.io/solutions/logistics-transportation/', desc:'Fleet safety, ETAs, dispatch. Cross-links với trucking.'},
+{id:'sol-energy', label:'Energy & Utilities', cls:'c-solutions', x:1080, y:30,
+ url:'tomorrow.io/solutions/energy-utilities/', desc:'Wind, solar, hydro. Trading, refinery. Also /solutions/renewables/'},
+{id:'sol-renew', label:'Renewables', cls:'leaf c-solutions', x:1180, y:20,
+ url:'tomorrow.io/solutions/renewables/', desc:'Solar + wind asset optimization.'},
+
+// Row 2
+{id:'sol-construction', label:'Construction', cls:'c-solutions', x:780, y:100,
+ url:'tomorrow.io/solutions/construction/', desc:'Safety protocols, delay prevention, subcontractor coordination.'},
+{id:'sol-rail', label:'Railroads', cls:'c-solutions', x:880, y:100,
+ url:'tomorrow.io/solutions/railroads/', desc:'Trackline Agentic Suite. Track buckling, crosswind derailment, delay prediction.'},
+{id:'sol-retail', label:'Retail', cls:'c-solutions', x:980, y:100,
+ url:'tomorrow.io/solutions/retail/', desc:'Inventory, demand forecasting, supply chain based on weather.'},
+{id:'sol-operations', label:'Operations', cls:'c-solutions', x:1080, y:100,
+ url:'tomorrow.io/solutions/operations/', desc:'Broad ops hub — cross-industry operational decision making.'},
+{id:'sol-auto', label:'Automotive', cls:'c-solutions', x:1180, y:100,
+ url:'tomorrow.io/solutions/automotive/', desc:'EVs, connected vehicles, road weather. Also /solutions/drones/'},
+
+// Row 3
+{id:'sol-mining', label:'Mining', cls:'c-solutions', x:780, y:168,
+ url:'tomorrow.io/solutions/mining/', desc:'Safety windows, equipment protection, shaft operations.'},
+{id:'sol-agriculture', label:'Agriculture', cls:'c-solutions', x:880, y:168,
+ url:'tomorrow.io/solutions/agriculture/', desc:'Crop planning, irrigation, harvest timing, agri supply chain.'},
+{id:'sol-ondemand', label:'On-Demand', cls:'c-solutions', x:980, y:168,
+ url:'tomorrow.io/solutions/on-demand/', desc:'Ride-share, delivery dispatch, demand surge prediction.'},
+{id:'sol-port', label:'Port Operations', cls:'c-solutions', x:1080, y:168,
+ url:'tomorrow.io/solutions/port-operations/', desc:'Loading/unloading windows, crane operations, maritime safety.'},
+{id:'sol-intermodal', label:'Intermodal', cls:'c-solutions', x:1180, y:168,
+ url:'tomorrow.io/solutions/intermodal/', desc:'Multi-modal freight: rail + truck + port coordination.'},
+
+// Row 4 — niche verticals
+{id:'sol-pharma', label:'Pharma', cls:'leaf c-solutions', x:780, y:225,
+ url:'tomorrow.io/solutions/pharmaceuticals/', desc:'Cold chain, temperature-sensitive logistics.'},
+{id:'sol-sports', label:'Sports & Entertainment', cls:'leaf c-solutions', x:880, y:225,
+ url:'tomorrow.io/solutions/sports-entertainment/', desc:'Game-day ops, event safety, broadcast.'},
+{id:'sol-restaurants', label:'Restaurants', cls:'leaf c-solutions', x:980, y:225,
+ url:'tomorrow.io/solutions/restaurants/', desc:'Outdoor seating, delivery, foot traffic forecasting.'},
+{id:'sol-health', label:'Health Mgmt', cls:'leaf c-solutions', x:1080, y:225,
+ url:'tomorrow.io/solutions/health-management/', desc:'Heat illness prevention, worker safety protocols.'},
+{id:'sol-film', label:'Film Production', cls:'leaf c-solutions', x:1180, y:225,
+ url:'tomorrow.io/solutions/film-production/', desc:'Outdoor shoot scheduling, safety protocols.'},
+
+// Row 5 — more niche
+{id:'sol-realest', label:'Real Estate / Asset Mgmt', cls:'leaf c-solutions', x:780, y:275,
+ url:'tomorrow.io/solutions/real-estate-asset-management/', desc:'Property risk, maintenance scheduling.'},
+{id:'sol-digimkt', label:'Digital Marketing', cls:'leaf c-solutions', x:880, y:275,
+ url:'tomorrow.io/solutions/digital-marketing/', desc:'Weather-triggered campaigns, dynamic ads.'},
+{id:'sol-warehouse', label:'Warehouses', cls:'leaf c-solutions', x:980, y:275,
+ url:'tomorrow.io/solutions/warehouses/', desc:'Loading dock ops, worker safety, inventory protection.'},
+{id:'sol-nmhs', label:'NMHS', cls:'leaf c-solutions', x:1080, y:275,
+ url:'tomorrow.io/solutions/national-hydrometeorological-services-nmhs/', desc:'National Met Services: API + modeling để nâng cấp dự báo quốc gia.'},
+{id:'sol-esg', label:'ESG / Climate', cls:'leaf c-solutions', x:1180, y:275,
+ url:'tomorrow.io/solutions/esg/', desc:'Climate disclosure, adaptation strategy, resilience planning.'},
+{id:'sol-wrm', label:'Weather Risk Mgmt', cls:'leaf c-solutions', x:1080, y:315,
+ url:'tomorrow.io/solutions/weather-risk-management/', desc:'Cross-industry risk framework, financial hedging.'},
+
+// ==============================
+// SILO 4: GOVERNMENT & DEFENSE
+// ==============================
+{id:'s-gov', label:'GOV &\nDEFENSE', cls:'s-gov', x:1380, y:420,
+ url:'tomorrow.io/government-and-defense/', desc:'Tách riêng hoàn toàn. Procurement cycle khác, buyer là chính phủ/quân đội. 3 sub-segments.'},
+
+{id:'gov-main', label:'/gov-defense/', cls:'c-gov', x:1520, y:380,
+ url:'tomorrow.io/government-and-defense/', desc:'Main landing page for gov segment.'},
+{id:'gov-federal', label:'Civil Federal', cls:'c-gov', x:1560, y:440,
+ url:'tomorrow.io/government-and-defense/civil-federal/', desc:'Civil federal agencies: NOAA partnerships, port authorities, aviation regulators.'},
+{id:'gov-natsec', label:'National Security', cls:'c-gov', x:1560, y:490,
+ url:'tomorrow.io/government-and-defense/national-security/', desc:'USAF, DoD, intelligence community. Weather + climate security.'},
+{id:'gov-statelocal', label:'State & Local', cls:'c-gov', x:1560, y:540,
+ url:'tomorrow.io/government-and-defense/state-local/', desc:'Municipal emergency management, public safety, infrastructure.'},
+
+// ==============================
+// SILO 5: DASHBOARDS TEMPLATES
+// ==============================
+{id:'s-dash', label:'DASHBOARD\nTEMPLATES', cls:'s-dash', x:1380, y:700,
+ url:'tomorrow.io/dashboards/*', desc:'Pre-built dashboard templates per use case. 30+ templates. Đây là conversion tool — show value before purchase. Unique silo không có trong nhiều SaaS.'},
+
+{id:'d-rail', label:'Railroad Dashboards', cls:'c-dash', x:1520, y:650,
+ url:'/dashboards/crosswind-derailment, railroad-ops, railyard, track-buckling', desc:'4 railroad-specific templates: Cross-wind derailment, Operations, Railyard management, Track buckling.'},
+{id:'d-aviation', label:'Aviation Dashboards', cls:'c-dash', x:1560, y:700,
+ url:'/dashboards/forecasted-holdover-times, high-wind-procedures, snowfall', desc:'3 templates: Holdover times, High-wind procedures, Snowfall intensity.'},
+{id:'d-fleet', label:'Fleet/Logistics', cls:'c-dash', x:1560, y:750,
+ url:'/dashboards/road-logistics, cargo, last-mile, fleet-management', desc:'Multiple logistics dashboards. Road ops, cargo mgmt, last-mile delivery.'},
+{id:'d-sports', label:'Sports Dashboards', cls:'c-dash', x:1560, y:800,
+ url:'/dashboards/football, golf, ski, soccer, tennis, motorsports', desc:'6 sport-specific templates. Fan experience + venue ops.'},
+{id:'d-safety', label:'Safety Dashboards', cls:'c-dash', x:1520, y:850,
+ url:'/dashboards/heat-illness, employee-health, driver-retention', desc:'Worker safety, heat illness prevention, driver wellness.'},
+{id:'d-agri', label:'Ag/Other', cls:'leaf c-dash', x:1460, y:900,
+ url:'/dashboards/irrigation, planting, drones, e-commerce', desc:'Agriculture, drone ops, e-commerce fulfillment, movie production.'},
+
+// ==============================
+// SILO 6: CONTENT (Blog/FAQ/Cases)
+// ==============================
+{id:'s-content', label:'CONTENT HUB', cls:'s-content', x:620, y:1020,
+ url:'tomorrow.io/blog/ + /a/faq/ + /customer-stories/', desc:'3-in-1 content silo: Blog (TOFU), FAQ (TOFU/MOFU), Customer Stories (MOFU/BOFU). Blog categories map 1:1 với Solutions verticals — tight SEO silo logic.'},
+
+{id:'ct-blog', label:'Blog', cls:'c-content', x:440, y:950,
+ url:'tomorrow.io/blog/', desc:'300+ articles. Taxonomy: 30 categories. Maps các verticals 1:1. TOFU + Dev content.'},
+
+// Blog categories grouped
+{id:'ct-bl-api', label:'weather-api\npython-tutorials\nhistorical-api', cls:'leaf c-content', x:300, y:900,
+ url:'/blog/category/weather-api/ +python-tutorials +historical-weather-api', desc:'Developer content: API how-tos, Python tutorials, historical data guides.'},
+{id:'ct-bl-weather', label:'weather-ai\nweather-security', cls:'leaf c-content', x:300, y:950,
+ url:'/blog/category/weather-ai/ + weather-and-climate-security/', desc:'AI content + security sub-categories: construction, energy, logistics, on-demand, sports.'},
+{id:'ct-bl-industry', label:'aviation, insurance,\nrail, retail, mining,\nagri, space...', cls:'leaf c-content', x:300, y:1000,
+ url:'/blog/category/[industry]/', desc:'Industry-specific categories matching Solutions verticals exactly.'},
+{id:'ct-bl-press', label:'press\nour-team\nclimacom', cls:'leaf c-content', x:300, y:1042,
+ url:'/blog/category/press/ +our-team +climacon', desc:'PR articles + team stories + annual Climacon conference.'},
+
+{id:'ct-faq', label:'FAQ Hub\n(/a/faq/)', cls:'c-content', x:540, y:960,
+ url:'tomorrow.io/a/faq/', desc:'Interesting URL structure /a/ — may be separate subdirectory. 2 main FAQ sections: weather-ai và weather-api. Each question = individual SEO page.'},
+{id:'ct-faq-ai', label:'Weather AI FAQ', cls:'leaf c-content', x:460, y:1020,
+ url:'/a/faq/weather-ai/', desc:'2 pages: "What is weather AI forecasting" + "Can AI produce more accurate forecasts"'},
+{id:'ct-faq-api', label:'Weather API FAQ', cls:'leaf c-content', x:560, y:1040,
+ url:'/a/faq/weather-api/', desc:'10+ FAQ pages: get API key, Python usage, JavaScript, Android, data layers, rate limiting...'},
+
+{id:'ct-cases', label:'Customer Stories', cls:'c-content', x:700, y:960,
+ url:'tomorrow.io/customer-stories/', desc:'25+ case studies. Key clients: JetBlue, Ford Racing, Fox Sports, Google, Uber, USAF, Shipt, Bahamas Gov. BOFU content.'},
+{id:'ct-video', label:'Video Library', cls:'c-content', x:720, y:1030,
+ url:'tomorrow.io/video-library/', desc:'Centralized video hub. Webinars, demos, product tours, Climacon recordings.'},
+{id:'ct-editorial', label:'Editorial Team\n(/a/editorial/)', cls:'leaf c-content', x:800, y:1000,
+ url:'tomorrow.io/a/editorial/team/', desc:'Author profiles cho các content contributors. SEO E-E-A-T signal.'},
+
+// ==============================
+// SILO 7: MEDIA & PR
+// ==============================
+{id:'s-media', label:'MEDIA & PR', cls:'s-media', x:980, y:900,
+ url:'tomorrow.io/all-press-releases/ + /in-the-news/', desc:'Dedicated PR silo. Tách blog PR content vs official press releases.'},
+
+{id:'m-pr', label:'All Press Releases', cls:'c-media', x:840, y:870,
+ url:'tomorrow.io/all-press-releases/', desc:'Archive tất cả press releases. Separate từ blog.'},
+{id:'m-news', label:'In The News', cls:'c-media', x:840, y:930,
+ url:'tomorrow.io/in-the-news/', desc:'Curated media coverage: Forbes, Avionics, Sky News... Social proof.'},
+{id:'m-contact', label:'Press Contact', cls:'c-media', x:840, y:990,
+ url:'tomorrow.io/press-contact-information/', desc:'PR contact page.'},
+{id:'m-climacon', label:'Climacon4', cls:'c-media', x:960, y:950,
+ url:'tomorrow.io/climacon4/', desc:'Annual weather intelligence conference. Own landing page — implies recurring event.'},
+
+// ==============================
+// SILO 8: COMPANY
+// ==============================
+{id:'s-company', label:'COMPANY', cls:'s-company', x:1380, y:200,
+ url:'tomorrow.io/company/', desc:'Standard company silo. Small but critical for enterprise trust.'},
+
+{id:'co-about', label:'About', cls:'c-company', x:1520, y:160,
+ url:'tomorrow.io/company/', desc:'Founded 2016 as ClimaCell → rebranded Tomorrow.io. Boston HQ. 250+ enterprise clients.'},
+{id:'co-careers', label:'Careers', cls:'c-company', x:1520, y:220,
+ url:'tomorrow.io/careers/', desc:'Hiring page. "Your Impact Starts Here." Remote-friendly, competitive comp.'},
+{id:'co-partners', label:'Partnerships', cls:'c-company', x:1520, y:280,
+ url:'tomorrow.io/partnerships/', desc:'Partner program. Channel partners, tech integrations, resellers.'},
+{id:'co-dtn', label:'DTN Partnership', cls:'leaf c-company', x:1560, y:330,
+ url:'tomorrow.io/dtn/', desc:'Dedicated page cho DTN partnership — agricultural + energy data provider.'},
+
+// ==============================
+// SILO 9: COMPETITOR COMPARISONS
+// ==============================
+{id:'s-compare', label:'COMPETITOR\nCOMPARE', cls:'s-compare', x:620, y:380,
+ url:'/the-weather-company/ + /tomorrow-io-vs-wsi-fusion/', desc:'Competitor comparison pages. SEO strategy để capture branded + comparison queries. Underutilized — only 2 pages found.'},
+
+{id:'cmp-twc', label:'vs The Weather Company', cls:'c-compare', x:530, y:300,
+ url:'tomorrow.io/the-weather-company/', desc:'IBM The Weather Company comparison page. Target: switching buyers.'},
+{id:'cmp-wsi', label:'vs WSI Fusion', cls:'c-compare', x:530, y:360,
+ url:'tomorrow.io/tomorrow-io-vs-wsi-fusion/', desc:'WSI/DTN Fusion comparison. Very specific targeting.'},
+{id:'cmp-nextgen', label:'NextGen / ResilienceNow', cls:'c-compare', x:530, y:420,
+ url:'tomorrow.io/nextgen/ + /resiliencenow/ + /6yearstolaunch/', desc:'Campaign/initiative pages. NextGen: industry platform upgrade. ResilienceNow: awareness campaign. 6yearstolaunch: anniversary.'},
+{id:'cmp-consapp', label:'Consumer App', cls:'c-compare', x:530, y:480,
+ url:'tomorrow.io/consumer-app/', desc:'B2C weather app. Separate từ enterprise platform — different audience entirely.'},
+
+// ==============================
+// SILO 10: LANDING PAGES
+// ==============================
+{id:'s-lp', label:'LANDING PAGES\n(lp/)', cls:'s-lp', x:620, y:560,
+ url:'tomorrow.io/lp/*', desc:'Dedicated conversion LP — tách khỏi nav để maximize conversion. Paid traffic destinations.'},
+
+{id:'lp-demo', label:'Get Demo', cls:'c-lp', x:490, y:530,
+ url:'tomorrow.io/lp/get-demo/ + /get-demo-resilience-3/ + /get-demo-resilience-5/', desc:'3 demo request variants! A/B testing hoặc funnel stage. Resilience-3 vs 5 suggests iteration.'},
+{id:'lp-deepsky', label:'DeepSky Updates', cls:'c-lp', x:490, y:590,
+ url:'tomorrow.io/lp/deepsky-updates/', desc:'Lead capture cho satellite constellation news. Niche but high-intent.'},
+
+];
+
+// ===== EDGES =====
+const E = [
+// root → silos
+{f:'root', t:'s-product', c:'#3b82f6'},
+{f:'root', t:'s-space', c:'#818cf8'},
+{f:'root', t:'s-solutions', c:'#10b981'},
+{f:'root', t:'s-gov', c:'#06b6d4'},
+{f:'root', t:'s-dash', c:'#14b8a6'},
+{f:'root', t:'s-content', c:'#f59e0b'},
+{f:'root', t:'s-media', c:'#ef4444'},
+{f:'root', t:'s-company', c:'#a855f7'},
+{f:'root', t:'s-compare', c:'#d97706'},
+{f:'root', t:'s-lp', c:'#7c3aed'},
+
+// product
+{f:'s-product', t:'p-platform', c:'#3b82f6'},
+{f:'s-product', t:'p-api', c:'#3b82f6'},
+{f:'s-product', t:'p-datalayers', c:'#3b82f6'},
+{f:'s-product', t:'p-tech', c:'#3b82f6'},
+{f:'s-product', t:'p-latest', c:'#3b82f6'},
+{f:'p-api', t:'p-api-maps', c:'#60a5fa'},
+{f:'p-api', t:'p-api-hist', c:'#60a5fa'},
+{f:'p-api', t:'p-api-hist2', c:'#60a5fa'},
+{f:'p-api', t:'p-api-alerts', c:'#60a5fa'},
+{f:'p-datalayers', t:'p-dl-temp', c:'#93c5fd'},
+{f:'p-datalayers', t:'p-dl-wind', c:'#93c5fd'},
+{f:'p-datalayers', t:'p-dl-rain', c:'#93c5fd'},
+{f:'p-datalayers', t:'p-dl-uv', c:'#93c5fd'},
+
+// space
+{f:'s-space', t:'sp-main', c:'#818cf8'},
+{f:'s-space', t:'sp-satdata', c:'#818cf8'},
+{f:'sp-main', t:'sp-deepsky', c:'#a5b4fc'},
+{f:'sp-main', t:'sp-pathfinder', c:'#a5b4fc'},
+{f:'sp-deepsky', t:'sp-radar', c:'#c7d2fe'},
+{f:'sp-deepsky', t:'sp-sounder', c:'#c7d2fe'},
+{f:'sp-pathfinder', t:'sp-arena', c:'#c7d2fe'},
+{f:'sp-pathfinder', t:'sp-products', c:'#c7d2fe'},
+
+// solutions
+{f:'s-solutions', t:'sol-insurance', c:'#10b981'},
+{f:'s-solutions', t:'sol-aviation', c:'#10b981'},
+{f:'s-solutions', t:'sol-logistics', c:'#10b981'},
+{f:'s-solutions', t:'sol-energy', c:'#10b981'},
+{f:'sol-energy', t:'sol-renew', c:'#34d399'},
+{f:'s-solutions', t:'sol-construction', c:'#10b981'},
+{f:'s-solutions', t:'sol-rail', c:'#10b981'},
+{f:'s-solutions', t:'sol-retail', c:'#10b981'},
+{f:'s-solutions', t:'sol-operations', c:'#10b981'},
+{f:'s-solutions', t:'sol-auto', c:'#10b981'},
+{f:'s-solutions', t:'sol-mining', c:'#10b981'},
+{f:'s-solutions', t:'sol-agriculture', c:'#10b981'},
+{f:'s-solutions', t:'sol-ondemand', c:'#10b981'},
+{f:'s-solutions', t:'sol-port', c:'#10b981'},
+{f:'s-solutions', t:'sol-intermodal', c:'#10b981'},
+{f:'s-solutions', t:'sol-pharma', c:'#34d399'},
+{f:'s-solutions', t:'sol-sports', c:'#34d399'},
+{f:'s-solutions', t:'sol-restaurants', c:'#34d399'},
+{f:'s-solutions', t:'sol-health', c:'#34d399'},
+{f:'s-solutions', t:'sol-film', c:'#34d399'},
+{f:'s-solutions', t:'sol-realest', c:'#34d399'},
+{f:'s-solutions', t:'sol-digimkt', c:'#34d399'},
+{f:'s-solutions', t:'sol-warehouse', c:'#34d399'},
+{f:'s-solutions', t:'sol-nmhs', c:'#34d399'},
+{f:'s-solutions', t:'sol-esg', c:'#34d399'},
+{f:'s-solutions', t:'sol-wrm', c:'#34d399'},
+
+// gov
+{f:'s-gov', t:'gov-main', c:'#06b6d4'},
+{f:'gov-main', t:'gov-federal', c:'#67e8f9'},
+{f:'gov-main', t:'gov-natsec', c:'#67e8f9'},
+{f:'gov-main', t:'gov-statelocal', c:'#67e8f9'},
+
+// dashboards
+{f:'s-dash', t:'d-rail', c:'#14b8a6'},
+{f:'s-dash', t:'d-aviation', c:'#14b8a6'},
+{f:'s-dash', t:'d-fleet', c:'#14b8a6'},
+{f:'s-dash', t:'d-sports', c:'#14b8a6'},
+{f:'s-dash', t:'d-safety', c:'#14b8a6'},
+{f:'d-safety', t:'d-agri', c:'#5eead4'},
+
+// content
+{f:'s-content', t:'ct-blog', c:'#f59e0b'},
+{f:'s-content', t:'ct-faq', c:'#f59e0b'},
+{f:'s-content', t:'ct-cases', c:'#f59e0b'},
+{f:'s-content', t:'ct-video', c:'#f59e0b'},
+{f:'ct-blog', t:'ct-bl-api', c:'#fbbf24'},
+{f:'ct-blog', t:'ct-bl-weather', c:'#fbbf24'},
+{f:'ct-blog', t:'ct-bl-industry', c:'#fbbf24'},
+{f:'ct-blog', t:'ct-bl-press', c:'#fbbf24'},
+{f:'ct-faq', t:'ct-faq-ai', c:'#fcd34d'},
+{f:'ct-faq', t:'ct-faq-api', c:'#fcd34d'},
+{f:'ct-cases', t:'ct-editorial', c:'#fcd34d'},
+
+// media
+{f:'s-media', t:'m-pr', c:'#ef4444'},
+{f:'s-media', t:'m-news', c:'#ef4444'},
+{f:'s-media', t:'m-contact', c:'#ef4444'},
+{f:'s-media', t:'m-climacon', c:'#ef4444'},
+
+// company
+{f:'s-company', t:'co-about', c:'#a855f7'},
+{f:'s-company', t:'co-careers', c:'#a855f7'},
+{f:'s-company', t:'co-partners', c:'#a855f7'},
+{f:'co-partners', t:'co-dtn', c:'#c084fc'},
+
+// compare
+{f:'s-compare', t:'cmp-twc', c:'#d97706'},
+{f:'s-compare', t:'cmp-wsi', c:'#d97706'},
+{f:'s-compare', t:'cmp-nextgen', c:'#d97706'},
+{f:'s-compare', t:'cmp-consapp', c:'#d97706'},
+
+// LP
+{f:'s-lp', t:'lp-demo', c:'#7c3aed'},
+{f:'s-lp', t:'lp-deepsky', c:'#7c3aed'},
+
+// CROSS-SILO (dashed) — key strategic connections
+{f:'sol-rail', t:'d-rail', c:'#6366f1', d:true},
+{f:'sol-aviation', t:'d-aviation', c:'#6366f1', d:true},
+{f:'sol-logistics', t:'d-fleet', c:'#6366f1', d:true},
+{f:'sol-sports', t:'d-sports', c:'#6366f1', d:true},
+{f:'sp-satdata', t:'s-gov', c:'#6366f1', d:true},
+{f:'sol-nmhs', t:'s-gov', c:'#6366f1', d:true},
+{f:'p-api', t:'ct-faq-api', c:'#6366f1', d:true},
+{f:'ct-cases', t:'s-solutions', c:'#6366f1', d:true},
+{f:'lp-demo', t:'p-platform', c:'#6366f1', d:true},
+{f:'m-climacon', t:'ct-bl-press', c:'#6366f1', d:true},
+];
+
+// ===== RENDER ENGINE =====
+const mindmapEl = document.getElementById('mindmap');
+const svgEl     = document.getElementById('svg-layer');
+const svgGroup  = document.getElementById('svg-group');
+const nodeMap   = {};      // id → DOM element
+const edgePaths = [];      // [{path, edge}] for highlight
+
+let scale = 0.58, tx = 20, ty = -10;
+let canvasDragging = false, canvasDragStart = {x:0, y:0};
+
+// Node visual size (approx)
+const NW = 130, NH = 38;
+
+// ===== TREE STRUCTURE (non-dashed edges only) =====
+const childrenOf = {};
+const parentOf   = {};
+N.forEach(n => { childrenOf[n.id] = []; });
+E.forEach(e => {
+  if (!e.d) {
+    (childrenOf[e.f] = childrenOf[e.f] || []).push(e.t);
+    parentOf[e.t] = e.f;
+  }
+});
+
+function descendants(id) {
+  const res = [];
+  const walk = nid => (childrenOf[nid]||[]).forEach(c => { res.push(c); walk(c); });
+  walk(id);
+  return res;
+}
+
+// ===== STATE =====
+const collapsedNodes = new Set();   // nodes whose children are hidden
+const dragOffsets    = {};           // id → {dx,dy} — per-node free drag
+let focusedSilo = null;              // id of focused silo, null = show all
+
+// effective position = original + drag offset
+function getPos(n) {
+  const o = dragOffsets[n.id] || {dx:0, dy:0};
+  return {x: n.x + o.dx, y: n.y + o.dy};
+}
+function center(n) {
+  const p = getPos(n);
+  return {x: p.x + NW/2, y: p.y + NH/2};
+}
+
+// which nodes should be hidden right now
+function getHiddenSet() {
+  const hidden = new Set();
+  if (focusedSilo) {
+    const allowed = new Set(['root', focusedSilo, ...descendants(focusedSilo)]);
+    N.forEach(n => { if (!allowed.has(n.id)) hidden.add(n.id); });
+    return hidden;
+  }
+  collapsedNodes.forEach(id => descendants(id).forEach(c => hidden.add(c)));
+  return hidden;
+}
+
+// ===== RENDER NODES (once) =====
+function renderNodes() {
+  N.forEach(n => {
+    const el = document.createElement('div');
+    el.className = 'node ' + n.cls;
+    el.id = 'nd-' + n.id;
+    el.innerHTML = n.label;
+    el.style.left = n.x + 'px';
+    el.style.top  = n.y + 'px';
+
+    // --- HOVER: highlight edges ---
+    el.addEventListener('mouseenter', e => {
+      if (activeDragNode) return;
+      highlightEdges(n.id);
+      showTip(e, n);
+    });
+    el.addEventListener('mouseleave', () => {
+      resetEdgeHighlight();
+      document.getElementById('tooltip').style.display = 'none';
+    });
+    el.addEventListener('mousemove', moveTip);
+
+    // --- DRAG: per-node free drag ---
+    el.addEventListener('mousedown', e => {
+      e.stopPropagation();
+      startNodeDrag(e, n);
+    });
+
+    mindmapEl.appendChild(el);
+    nodeMap[n.id] = el;
+  });
+}
+
+// ===== RENDER / UPDATE EDGES =====
+function renderEdges() {
+  svgGroup.innerHTML = '';
+  edgePaths.length = 0;
+  const hidden = getHiddenSet();
+
+  E.forEach(edge => {
+    const fn = N.find(n => n.id === edge.f);
+    const tn = N.find(n => n.id === edge.t);
+    if (!fn || !tn) return;
+    if (hidden.has(fn.id) || hidden.has(tn.id)) return;
+
+    const fc = center(fn), tc = center(tn);
+    const mx = (fc.x + tc.x) / 2, my = (fc.y + tc.y) / 2;
+    const path = document.createElementNS('http://www.w3.org/2000/svg','path');
+    path.setAttribute('d', `M ${fc.x} ${fc.y} Q ${mx} ${my} ${tc.x} ${tc.y}`);
+    path.setAttribute('stroke', edge.c || '#334155');
+    path.setAttribute('stroke-width', edge.d ? '1' : '1.4');
+    path.setAttribute('fill', 'none');
+    path.setAttribute('opacity', edge.d ? '0.28' : '0.45');
+    if (edge.d) path.setAttribute('stroke-dasharray', '5,4');
+    svgGroup.appendChild(path);
+    edgePaths.push({path, edge});
+  });
+}
+
+// update visibility of all node divs + re-render edges
+function updateVisibility() {
+  const hidden = getHiddenSet();
+  N.forEach(n => {
+    const el = nodeMap[n.id];
+    el.style.display = hidden.has(n.id) ? 'none' : '';
+    // collapsed indicator
+    const hasKids = (childrenOf[n.id]||[]).length > 0;
+    if (hasKids && collapsedNodes.has(n.id)) {
+      el.style.opacity = '0.65';
+      el.style.outline = '1.5px dashed rgba(255,255,255,0.25)';
+    } else {
+      el.style.opacity = '';
+      el.style.outline = '';
+    }
+  });
+  // Focus mode overlay on titlebar
+  const p = document.querySelector('#titlebar p');
+  if (focusedSilo) {
+    const siloName = N.find(x => x.id === focusedSilo)?.label.replace(/\n/g,' ');
+    p.innerHTML = `<span style="color:#f59e0b">Focus: ${siloName}</span> &nbsp;<span style="color:#475569;cursor:pointer" onclick="exitFocus()">✕ Exit</span>`;
+  } else {
+    p.textContent = 'Actual crawl data · 10 silos · ~500+ URLs · Digital Twin Reference';
+  }
+  renderEdges();
+}
+
+function exitFocus() { focusedSilo = null; updateVisibility(); }
+
+// update a single node's DOM position after drag
+function syncNodePos(n) {
+  const p = getPos(n);
+  const el = nodeMap[n.id];
+  el.style.left = p.x + 'px';
+  el.style.top  = p.y + 'px';
+}
+
+// ===== HOVER: edge highlight =====
+function highlightEdges(nodeId) {
+  edgePaths.forEach(({path, edge}) => {
+    const connected = edge.f === nodeId || edge.t === nodeId;
+    path.setAttribute('opacity', connected ? '1' : '0.06');
+    if (connected) {
+      path.setAttribute('stroke-width', edge.d ? '1.8' : '2.5');
+      path.style.filter = 'drop-shadow(0 0 3px currentColor)';
+    } else {
+      path.setAttribute('stroke-width', edge.d ? '1' : '1.4');
+      path.style.filter = '';
+    }
+  });
+}
+function resetEdgeHighlight() {
+  edgePaths.forEach(({path, edge}) => {
+    path.setAttribute('opacity', edge.d ? '0.28' : '0.45');
+    path.setAttribute('stroke-width', edge.d ? '1' : '1.4');
+    path.style.filter = '';
+  });
+}
+
+// ===== CLICK: expand/collapse & focus =====
+function handleNodeClick(n) {
+  const isSiloNode = n.cls.startsWith('s-') && n.id !== 'root';
+  const isRoot     = n.id === 'root';
+
+  if (isRoot) {
+    // root click = exit focus + expand all
+    focusedSilo = null;
+    collapsedNodes.clear();
+    updateVisibility();
+    return;
+  }
+
+  if (isSiloNode) {
+    // silo click = focus/unfocus
+    focusedSilo = focusedSilo === n.id ? null : n.id;
+    updateVisibility();
+    return;
+  }
+
+  // non-silo: toggle expand/collapse if has children
+  const kids = childrenOf[n.id] || [];
+  if (kids.length > 0) {
+    collapsedNodes.has(n.id) ? collapsedNodes.delete(n.id) : collapsedNodes.add(n.id);
+    updateVisibility();
+  }
+  // always show detail panel
+  showPanel(n);
+}
+
+// ===== PER-NODE DRAG =====
+let activeDragNode  = null;
+let nodeDragOrigin  = {mx:0, my:0, ox:0, oy:0};
+let nodeDragMoved   = false;
+
+function startNodeDrag(e, n) {
+  activeDragNode = n;
+  nodeDragMoved  = false;
+  const o = dragOffsets[n.id] || {dx:0, dy:0};
+  nodeDragOrigin = {mx: e.clientX, my: e.clientY, ox: o.dx, oy: o.dy};
+  document.body.style.cursor = 'grabbing';
+}
+
+window.addEventListener('mousemove', e => {
+  // per-node drag
+  if (activeDragNode) {
+    const ddx = (e.clientX - nodeDragOrigin.mx) / scale;
+    const ddy = (e.clientY - nodeDragOrigin.my) / scale;
+    if (Math.abs(ddx) > 3 || Math.abs(ddy) > 3) nodeDragMoved = true;
+    if (nodeDragMoved) {
+      dragOffsets[activeDragNode.id] = {dx: nodeDragOrigin.ox + ddx, dy: nodeDragOrigin.oy + ddy};
+      syncNodePos(activeDragNode);
+      renderEdges();
+    }
+    return;
+  }
+  // canvas pan
+  if (!canvasDragging) return;
+  tx = e.clientX - canvasDragStart.x;
+  ty = e.clientY - canvasDragStart.y;
+  applyTransform();
+});
+
+window.addEventListener('mouseup', e => {
+  if (activeDragNode) {
+    if (!nodeDragMoved) handleNodeClick(activeDragNode);
+    activeDragNode = null;
+    document.body.style.cursor = 'default';
+    return;
+  }
+  canvasDragging = false;
+  document.body.style.cursor = 'default';
+});
+
+// ===== CANVAS PAN =====
+document.getElementById('canvas-wrap').addEventListener('mousedown', e => {
+  if (e.target.classList.contains('node')) return;
+  canvasDragging = true;
+  canvasDragStart = {x: e.clientX - tx, y: e.clientY - ty};
+  document.body.style.cursor = 'grabbing';
+});
+
+// ===== ZOOM =====
+document.getElementById('canvas-wrap').addEventListener('wheel', e => {
+  e.preventDefault();
+  scale = Math.min(Math.max(scale * (e.deltaY > 0 ? 0.9 : 1.1), 0.15), 2.5);
+  applyTransform();
+}, {passive:false});
+
+// ===== ESC: exit focus =====
+window.addEventListener('keydown', e => {
+  if (e.key === 'Escape') { focusedSilo = null; collapsedNodes.clear(); updateVisibility(); }
+});
+
+// ===== TOOLTIP =====
+function showTip(e, n) {
+  const tt = document.getElementById('tooltip');
+  const hint = (childrenOf[n.id]||[]).length > 0
+    ? (n.cls.startsWith('s-') ? '<div style="color:#f59e0b;font-size:9.5px;margin-top:4px">Click để Focus silo này</div>'
+       : '<div style="color:#94a3b8;font-size:9.5px;margin-top:4px">Click để Expand/Collapse</div>')
+    : '';
+  tt.innerHTML = `<strong>${n.label.replace(/\n/g,' ')}</strong>${n.desc}<div class="url">${n.url}</div>${hint}`;
+  tt.style.display = 'block';
+  moveTip(e);
+}
+function moveTip(e) {
+  const tt = document.getElementById('tooltip');
+  tt.style.left = (e.clientX + 16) + 'px';
+  tt.style.top  = Math.max(10, e.clientY - 60) + 'px';
+}
+
+function showPanel(n) {
+  document.getElementById('p-title').textContent = n.label.replace(/\n/g,' ');
+  document.getElementById('p-url').textContent   = n.url;
+  document.getElementById('p-desc').textContent  = n.desc;
+  document.getElementById('panel').style.display = 'block';
+}
+
+// ===== TRANSFORM =====
+function applyTransform() {
+  mindmapEl.style.transform    = `translate(${tx}px,${ty}px) scale(${scale})`;
+  mindmapEl.style.transformOrigin = '0 0';
+  svgGroup.setAttribute('transform', `translate(${tx},${ty}) scale(${scale})`);
+  svgEl.setAttribute('viewBox', `0 0 ${window.innerWidth} ${window.innerHeight}`);
+  svgEl.setAttribute('width',  window.innerWidth);
+  svgEl.setAttribute('height', window.innerHeight);
+}
+
+function resetView() {
+  scale = 0.58; tx = 20; ty = -10;
+  focusedSilo = null;
+  collapsedNodes.clear();
+  Object.keys(dragOffsets).forEach(k => delete dragOffsets[k]);
+  N.forEach(n => { nodeMap[n.id].style.left = n.x+'px'; nodeMap[n.id].style.top = n.y+'px'; });
+  updateVisibility();
+  applyTransform();
+}
+function zoomIn()  { scale = Math.min(scale * 1.15, 2.5); applyTransform(); }
+function zoomOut() { scale = Math.max(scale * 0.87, 0.15); applyTransform(); }
+
+window.addEventListener('resize', applyTransform);
+
+// ===== INIT =====
+renderNodes();
+renderEdges();
+applyTransform();
+</script>
+</body>
+</html>
